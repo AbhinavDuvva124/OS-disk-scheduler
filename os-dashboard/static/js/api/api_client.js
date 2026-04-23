@@ -1,6 +1,8 @@
-/* ── API MODULE ── */
+/* API MODULE */
+const RAILWAY_API_BASE = (window.RAILWAY_API_BASE_URL || 'https://your-railway-service.up.railway.app').replace(/\/$/, '');
+
 const API = {
-  base: '',
+  base: RAILWAY_API_BASE,
 
   async get(path) {
     const r = await fetch(this.base + path);

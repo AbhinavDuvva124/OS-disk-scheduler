@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OS Dashboard — Real-Time System Monitor & Scheduler</title>
+  <meta name="description" content="Live OS resource monitor with CPU & Disk scheduling algorithm simulations, Gantt charts and performance analytics."/>
+  <link rel="stylesheet" href="/static/css/main.css"/>
+  <link rel="stylesheet" href="/static/css/disk.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════ NAVBAR ═══════════════ -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="logo-icon">⚙️</span>
+    <span>OS Dashboard</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-section="section-system" id="tab-system">📊 System</button>
+    <button class="nav-tab" data-section="section-cpu" id="tab-cpu">🧠 CPU Scheduler</button>
+    <button class="nav-tab" data-section="section-disk" id="tab-disk">💾 Disk Scheduler</button>
+  </div>
+  <div class="nav-status">
+    <div class="status-dot"></div>
+    <span>Live</span>
+  </div>
+</nav>
+
+<!-- ═══════════════ SYSTEM MONITOR SECTION ═══════════════ -->
+<section class="section active" id="section-system">
+  <h1 class="section-title"><span class="icon">📊</span> Real-Time System Monitor</h1>
+
+  <!-- Metric cards -->
+  <div class="metrics-grid">
+    <div class="metric-card" style="--accent:var(--neon-purple)">
+      <div class="metric-icon">🔥</div>
+      <div class="metric-label">CPU Usage</div>
+      <div class="metric-value" id="cpu-overall">—</div>
+      <div class="metric-sub" id="cpu-freq">Frequency: —</div>
+      <div class="progress-track" style="margin-top:10px">
+        <div class="progress-fill" id="cpu-bar" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="metric-card" style="--accent:var(--neon-cyan)">
+      <div class="metric-icon">🧠</div>
+      <div class="metric-label">Memory Usage</div>
+      <div class="metric-value" id="mem-percent">—</div>
+      <div class="metric-sub" id="mem-used">Used: —</div>
+      <div class="progress-track" style="margin-top:10px">
+        <div class="progress-fill" id="mem-bar" style="width:0%;background:linear-gradient(90deg,var(--neon-cyan),#0891b2)"></div>
+      </div>
+    </div>
+    <div class="metric-card" style="--accent:var(--neon-orange)">
+      <div class="metric-icon">💾</div>
+      <div class="metric-label">Disk Used</div>
+      <div class="metric-value" id="disk-used">—</div>
+      <div class="metric-sub" id="disk-total">Total: —</div>
+      <div class="progress-track" style="margin-top:10px">
+        <div class="progress-fill" id="disk-bar" style="width:0%;background:linear-gradient(90deg,var(--neon-orange),#d97706)"></div>
+      </div>
+    </div>
+    <div class="metric-card" style="--accent:var(--neon-green)">
+      <div class="metric-icon">⚡</div>
+      <div class="metric-label">Processes</div>
+      <div class="metric-value" id="proc-count">—</div>
+      <div class="metric-sub">Active system processes</div>
+    </div>
+    <div class="metric-card" style="--accent:var(--neon-blue)">
+      <div class="metric-icon">🌐</div>
+      <div class="metric-label">Net Sent</div>
+      <div class="metric-value mono" id="net-sent" style="font-size:1.4rem">—</div>
+      <div class="metric-sub">Recv: <span id="net-recv">—</span></div>
+    </div>
+    <div class="metric-card" style="--accent:var(--neon-pink)">
+      <div class="metric-icon">⏱️</div>
+      <div class="metric-label">System Uptime</div>
+      <div class="metric-value mono" id="uptime-val" style="font-size:1.2rem">—</div>
+      <div class="metric-sub">Since last boot</div>
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="charts-grid">
+    <div class="card chart-card">
+      <div class="chart-title">CPU Usage History</div>
+      <div class="chart-wrap"><canvas id="cpu-history-chart"></canvas></div>
+    </div>
+    <div class="card chart-card">
+      <div class="chart-title">Memory Distribution</div>
+      <div class="chart-wrap"><canvas id="mem-donut-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CPU Cores -->
+  <div class="card" style="padding:20px;margin-bottom:20px">
+    <div class="chart-title">CPU Cores</div>
+    <div class="core-grid" id="core-grid"></div>
+  </div>
+
+  <!-- Top Processes -->
+  <div class="card" style="padding:20px">
+    <div class="chart-title">Top Processes by CPU</div>
+    <div class="process-table-wrap">
+      <table class="process-table">
+        <thead>
+          <tr><th>PID</th><th>Name</th><th>Status</th><th>CPU %</th><th>MEM %</th><th>Threads</th></tr>
+        </thead>
+        <tbody id="sys-proc-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ CPU SCHEDULER SECTION ═══════════════ -->
+<section class="section" id="section-cpu">
+  <h1 class="section-title"><span class="icon">🧠</span> CPU Scheduling Simulator</h1>
+
+  <!-- Input panel -->
+  <div class="card" style="padding:20px;margin-bottom:20px">
+    <div class="flex justify-between items-center mb-4" style="flex-wrap:wrap;gap:12px">
+      <div style="font-weight:600;font-size:1rem">Process Configuration</div>
+      <div class="flex gap-2" style="flex-wrap:wrap">
+        <select class="form-select" id="cpu-preset-select" style="width:auto"><option value="">-- Load Preset --</option></select>
+        <button class="btn btn-secondary btn-sm" id="cpu-add-proc">+ Add Process</button>
+        <button class="btn btn-danger btn-sm" id="cpu-clear">Clear All</button>
+      </div>
+    </div>
+
+    <div class="process-table-wrap mb-4">
+      <table class="proc-input-table">
+        <thead><tr><th>PID</th><th>Arrival</th><th>Burst</th><th>Priority</th><th></th></tr></thead>
+        <tbody id="cpu-proc-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="form-grid mb-4">
+      <div class="form-group">
+        <label class="form-label">Algorithm</label>
+        <select class="form-select" id="cpu-algo-select">
+          <option value="fcfs">FCFS — First Come First Served</option>
+          <option value="sjf">SJF — Shortest Job First</option>
+          <option value="rr">Round Robin</option>
+          <option value="priority">Priority Scheduling</option>
+        </select>
+      </div>
+      <div class="form-group" id="quantum-wrap" style="display:none">
+        <label class="form-label">Time Quantum (RR)</label>
+        <input class="form-input" type="number" id="cpu-quantum" value="2" min="1" max="20"/>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" id="cpu-run">▶ Run Schedule</button>
+      <button class="btn btn-secondary" id="cpu-compare">⚖ Compare All</button>
+    </div>
+  </div>
+
+  <!-- Simulation controls -->
+  <div class="controls-bar">
+    <span style="font-weight:600;font-size:0.85rem;color:var(--text-secondary)">Simulation Controls</span>
+    <button class="btn btn-success btn-sm" id="cpu-sim-start">▶ Start</button>
+    <button class="btn btn-secondary btn-sm" id="cpu-sim-pause" disabled>⏸ Pause</button>
+    <button class="btn btn-secondary btn-sm" id="cpu-sim-step">⏭ Step</button>
+    <button class="btn btn-danger btn-sm" id="cpu-sim-reset">↺ Reset</button>
+    <div class="speed-control">
+      <span>Speed:</span>
+      <input type="range" class="speed-slider" id="cpu-speed" min="1" max="10" value="5"/>
+      <span id="cpu-speed-label">5x</span>
+    </div>
+  </div>
+
+  <!-- Queue visualization -->
+  <div class="card" style="padding:20px;margin-bottom:20px">
+    <div class="chart-title">Process Queue Animation</div>
+    <div class="queue-section">
+      <div class="queue-box">
+        <div class="queue-title" style="color:var(--neon-blue)">🔵 Ready Queue</div>
+        <div class="queue-items" id="queue-ready"><div style="color:var(--text-muted);font-size:0.75rem;padding:8px">Empty</div></div>
+      </div>
+      <div style="align-self:center;font-size:1.5rem;color:var(--text-muted)">→</div>
+      <div class="queue-box">
+        <div class="queue-title" style="color:var(--neon-green)">🟢 Running</div>
+        <div class="queue-items" id="queue-running"><div style="color:var(--text-muted);font-size:0.75rem;padding:8px">Idle</div></div>
+      </div>
+      <div style="align-self:center;font-size:1.5rem;color:var(--text-muted)">→</div>
+      <div class="queue-box">
+        <div class="queue-title" style="color:var(--neon-purple)">✅ Completed</div>
+        <div class="queue-items" id="queue-done"><div style="color:var(--text-muted);font-size:0.75rem;padding:8px">Empty</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gantt chart -->
+  <div class="card" style="padding:20px;margin-bottom:20px">
+    <div class="chart-title">Gantt Chart</div>
+    <div class="gantt-container" id="cpu-gantt-container"></div>
+  </div>
+
+  <!-- Results table -->
+  <div class="card" style="padding:20px;margin-bottom:20px hidden" id="cpu-results-section">
+    <div class="chart-title">Scheduling Results</div>
+    <div class="process-table-wrap mb-4">
+      <table class="process-table">
+        <thead><tr><th>PID</th><th>Arrival</th><th>Burst</th><th>Priority</th><th>Start</th><th>Finish</th><th>Wait</th><th>TAT</th><th>Response</th></tr></thead>
+        <tbody id="cpu-results-tbody"></tbody>
+      </table>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card" style="--accent:var(--neon-purple)">
+        <div class="metric-label">Avg Wait Time</div>
+        <div class="metric-value" id="cpu-avg-wait">—</div>
+      </div>
+      <div class="metric-card" style="--accent:var(--neon-cyan)">
+        <div class="metric-label">Avg Turnaround</div>
+        <div class="metric-value" id="cpu-avg-tat">—</div>
+      </div>
+      <div class="metric-card" style="--accent:var(--neon-green)">
+        <div class="metric-label">Avg Response</div>
+        <div class="metric-value" id="cpu-avg-rt">—</div>
+      </div>
+      <div class="metric-card" style="--accent:var(--neon-orange)">
+        <div class="metric-label">CPU Utilization</div>
+        <div class="metric-value" id="cpu-util">—</div>
+      </div>
+      <div class="metric-card" style="--accent:var(--neon-blue)">
+        <div class="metric-label">Throughput</div>
+        <div class="metric-value" id="cpu-throughput">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison & Analysis -->
+  <div class="hidden" id="cpu-compare-section">
+    <div class="card" style="padding:20px;margin-bottom:20px">
+      <div class="chart-title">Algorithm Comparison</div>
+      <div class="process-table-wrap" id="cpu-compare-table"></div>
+    </div>
+    <div class="charts-grid">
+      <div class="card chart-card">
+        <div class="chart-title">Algorithm Scores</div>
+        <div class="chart-wrap"><canvas id="cpu-score-chart"></canvas></div>
+      </div>
+      <div class="card analysis-panel">
+        <div class="chart-title">🤖 Intelligent Analysis</div>
+        <div class="analysis-header">
+          <span style="color:var(--text-secondary);font-size:0.85rem">Best Algorithm:</span>
+          <div class="analysis-badge">🏆 <span id="cpu-best-algo">—</span></div>
+        </div>
+        <div id="cpu-insights"></div>
+        <div class="recommendation-box" id="cpu-recommendation"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ DISK SCHEDULER SECTION ═══════════════ -->
+<section class="section" id="section-disk">
+  <h1 class="section-title"><span class="icon">💾</span> Advanced Disk Scheduling Simulator</h1>
+
+  <!-- Sub-tabs -->
+  <div class="disk-subtabs">
+    <button class="disk-subtab active" data-panel="panel-standard">Standard</button>
+    <button class="disk-subtab" data-panel="panel-priority">Priority / EDF</button>
+    <button class="disk-subtab" data-panel="panel-race">Race Mode</button>
+    <button class="disk-subtab" data-panel="panel-recommend">Smart Rec.</button>
+  </div>
+
+  <!-- ── Shared Config Card ── -->
+  <div class="card" style="padding:20px;margin-bottom:20px">
+    <div class="flex justify-between items-center mb-3" style="flex-wrap:wrap;gap:12px">
+      <span style="font-weight:600">Disk Request Configuration</span>
+      <select class="form-select" id="disk-preset-select" style="width:auto"><option value="">-- Load Preset --</option></select>
+    </div>
+
+    <!-- Workload generators -->
+    <div style="margin-bottom:12px">
+      <div class="form-label" style="margin-bottom:6px">Workload Generators</div>
+      <div class="workload-btns">
+        <button class="btn-wl" id="disk-gen-random">🎲 Random</button>
+        <button class="btn-wl" id="disk-gen-sequential">↗ Sequential</button>
+        <button class="btn-wl" id="disk-gen-clustered">🔵 Clustered</button>
+        <button class="btn-wl" id="disk-gen-heavy">🔥 Heavy Load</button>
+        <button class="btn-wl" id="disk-gen-scatter">✦ Scatter</button>
+      </div>
+    </div>
+
+    <div class="form-grid mb-3">
+      <div class="form-group" style="grid-column:span 2">
+        <label class="form-label">Disk Requests (comma or space separated)</label>
+        <input class="form-input mono" type="text" id="disk-requests" placeholder="e.g. 176, 79, 34, 60, 92, 11, 41"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Head Position</label>
+        <input class="form-input" type="number" id="disk-head" value="53" min="0"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Disk Size</label>
+        <input class="form-input" type="number" id="disk-size" value="200" min="10"/>
+      </div>
+    </div>
+
+    <!-- Live request injection -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <span class="form-label" style="margin:0">Live Inject:</span>
+      <input class="form-input" type="number" id="disk-live-track" placeholder="Track #" style="width:100px" min="0"/>
+      <button class="btn btn-secondary btn-sm" id="disk-add-live">+ Add</button>
+      <div class="live-queue-wrap" id="live-queue-tags"></div>
+    </div>
+
+    <!-- Heatmap -->
+    <div>
+      <div class="form-label" style="margin-bottom:6px">Track Access Heatmap</div>
+      <div class="heatmap-grid" id="disk-heatmap"></div>
+      <div class="heatmap-legend"><span>0</span><span>50</span><span>100</span><span>150</span><span>199</span></div>
+    </div>
+  </div>
+
+  <!-- ══ PANEL: Standard ══ -->
+  <div class="disk-panel active" id="panel-standard">
+    <div class="form-grid mb-3">
+      <div class="form-group">
+        <label class="form-label">Algorithm</label>
+        <select class="form-select" id="disk-algo-select">
+          <option value="fcfs">FCFS — First Come First Served</option>
+          <option value="sstf">SSTF — Shortest Seek Time First</option>
+          <option value="scan">SCAN (Elevator)</option>
+          <option value="cscan">C-SCAN (Circular)</option>
+          <option value="look">LOOK</option>
+          <option value="clook">C-LOOK</option>
+          <option value="nstep">N-Step SCAN</option>
+          <option value="fscan">FSCAN</option>
+        </select>
+      </div>
+      <div class="form-group" id="direction-wrap" style="display:none">
+        <label class="form-label">Direction</label>
+        <select class="form-select" id="disk-direction">
+          <option value="right">Right</option>
+          <option value="left">Left</option>
+        </select>
+      </div>
+      <div class="form-group" id="nstep-wrap" style="display:none">
+        <label class="form-label">N (sub-queue size)</label>
+        <input class="form-input" type="number" id="disk-nstep" value="4" min="1"/>
+      </div>
+    </div>
+    <div class="btn-group mb-4">
+      <button class="btn btn-primary" id="disk-run">▶ Run</button>
+      <button class="btn btn-secondary" id="disk-compare">⚖ Compare All 8</button>
+    </div>
+
+    <!-- Single-algo results -->
+    <div class="hidden" id="disk-results-section">
+      <div id="disk-starvation-warn" style="display:none;margin-bottom:14px"></div>
+      <div class="metrics-grid" style="margin-bottom:20px">
+        <div class="metric-card" style="--accent:var(--neon-cyan)">
+          <div class="metric-label">Algorithm</div>
+          <div class="metric-value mono" id="disk-algo-name" style="font-size:1.1rem">—</div>
+        </div>
+        <div class="metric-card" style="--accent:var(--neon-purple)">
+          <div class="metric-label">Total Seek</div>
+          <div class="metric-value" id="disk-total-seek">—</div>
+          <div class="metric-sub">cylinders</div>
+        </div>
+        <div class="metric-card" style="--accent:var(--neon-green)">
+          <div class="metric-label">Avg Seek</div>
+          <div class="metric-value" id="disk-avg-seek">—</div>
+        </div>
+        <div class="metric-card" style="--accent:var(--neon-orange)">
+          <div class="metric-label">Max Seek</div>
+          <div class="metric-value" id="disk-max-seek">—</div>
+        </div>
+        <div class="metric-card" style="--accent:var(--neon-blue)">
+          <div class="metric-label">Variance</div>
+          <div class="metric-value" id="disk-variance">—</div>
+        </div>
+        <div class="metric-card" style="--accent:var(--neon-green)">
+          <div class="metric-label">Fairness</div>
+          <div class="metric-value" id="disk-fairness">—</div>
+        </div>
+        <div class="metric-card" style="--accent:var(--neon-pink)">
+          <div class="metric-label">Total Time</div>
+          <div class="metric-value mono" id="disk-time-ms" style="font-size:1rem">—</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:20px;margin-bottom:20px">
+        <div class="chart-title">Seek Sequence</div>
+        <div id="disk-sequence" style="line-height:2.2;word-break:break-all"></div>
+      </div>
+
+      <div class="card" style="padding:20px;margin-bottom:20px">
+        <div class="chart-title">Disk Head Movement</div>
+        <div id="disk-viz"></div>
+        <div class="charts-grid" style="margin-top:14px">
+          <div class="chart-wrap" style="height:200px"><canvas id="disk-movement-chart"></canvas></div>
+          <div class="chart-wrap" style="height:200px"><canvas id="disk-seek-bar-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compare results -->
+    <div class="hidden" id="disk-compare-section">
+      <div id="disk-compare-starvation" style="display:none;margin-bottom:14px"></div>
+      <div class="card" style="padding:20px;margin-bottom:20px">
+        <div class="chart-title">8-Algorithm Comparison</div>
+        <div class="process-table-wrap" id="disk-compare-table"></div>
+      </div>
+      <div class="charts-grid">
+        <div class="card chart-card">
+          <div class="chart-title">Total Seek Distance</div>
+          <div class="chart-wrap"><canvas id="disk-compare-chart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-title">Fairness Index</div>
+          <div class="chart-wrap"><canvas id="disk-fairness-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="card analysis-panel" style="margin-top:20px">
+        <div class="chart-title">Intelligent Analysis</div>
+        <div class="analysis-header">
+          <span style="color:var(--text-secondary);font-size:0.85rem">Overall Best:</span>
+          <div class="analysis-badge">🏆 <span id="disk-best-algo">—</span></div>
+        </div>
+        <div id="disk-insights"></div>
+        <div class="recommendation-box" id="disk-recommendation"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PANEL: Priority / EDF ══ -->
+  <div class="disk-panel" id="panel-priority">
+    <div class="card" style="padding:20px;margin-bottom:20px">
+      <div class="flex justify-between items-center mb-3">
+        <span style="font-weight:600">Priority-Based Requests</span>
+        <div class="flex gap-2">
+          <select class="form-select" id="disk-priority-mode" style="width:auto">
+            <option value="priority">Priority Scheduling</option>
+            <option value="deadline">EDF (Earliest Deadline First)</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="DiskModule.addPriorityRow()">+ Add</button>
+        </div>
+      </div>
+      <div class="process-table-wrap">
+        <table class="priority-table">
+          <thead><tr><th>Track</th><th>Priority</th><th>Deadline</th><th></th></tr></thead>
+          <tbody id="disk-priority-tbody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn btn-primary" id="disk-priority-run">▶ Run Priority Schedule</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PANEL: Race Mode ══ -->
+  <div class="disk-panel" id="panel-race">
+    <div class="card" style="padding:20px;margin-bottom:20px">
+      <p style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:16px">Runs all 8 algorithms simultaneously and ranks them by total seek distance.</p>
+      <button class="btn btn-primary" id="disk-race">🏁 Start Race</button>
+    </div>
+    <div class="hidden" id="disk-race-section">
+      <div class="card" style="padding:20px;margin-bottom:20px">
+        <div class="chart-title">Race Results</div>
+        <div id="disk-race-results"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-title">Seek Distance Race</div>
+        <div class="chart-wrap" style="height:260px"><canvas id="disk-race-chart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PANEL: Smart Recommendation ══ -->
+  <div class="disk-panel" id="panel-recommend">
+    <div class="card" style="padding:20px;margin-bottom:20px">
+      <p style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:16px">Analyzes your workload pattern and suggests the optimal algorithm.</p>
+      <button class="btn btn-primary" id="disk-recommend">Analyze & Recommend</button>
+    </div>
+    <div class="hidden rec-card" id="disk-rec-section" style="padding:20px">
+      <div class="chart-title" style="margin-bottom:12px">Workload Analysis</div>
+      <div class="rec-stat"><span class="rec-stat-key">Pattern Detected</span><span class="rec-stat-val" id="rec-pattern">—</span></div>
+      <div class="rec-stat"><span class="rec-stat-key">Track Spread</span><span class="rec-stat-val" id="rec-spread">—</span></div>
+      <div class="rec-stat"><span class="rec-stat-key">Request Density</span><span class="rec-stat-val" id="rec-density">—</span></div>
+      <div class="rec-stat"><span class="rec-stat-key">Avg Dist from Head</span><span class="rec-stat-val" id="rec-avg-dist">—</span></div>
+      <div style="margin-top:16px;padding:14px;border-radius:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3)">
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px">RECOMMENDED</div>
+        <div style="font-size:1.4rem;font-weight:800;color:var(--neon-green)" id="rec-algo">—</div>
+        <div style="font-size:0.84rem;color:var(--text-secondary);margin-top:6px" id="rec-reason">—</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Scripts (order matters) -->
+<script src="/static/js/api/api_client.js"></script>
+<script src="/static/js/components/ui_components.js"></script>
+<script src="/static/js/modules/system_module.js"></script>
+<script src="/static/js/modules/cpu_module.js"></script>
+<script src="/static/js/modules/disk_module.js"></script>
+<script src="/static/js/main.js"></script>
+</body>
+</html>
